@@ -1,0 +1,167 @@
+---
+title: "Homework5"
+output: pdf_document
+author: "Xiuqi Qi"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 1
+
+```{r}
+library(MASS)
+set.seed(10)
+n = 100
+p = 200
+
+# generate data
+V = matrix(0.3, p, p)
+diag(V) = 1
+X_org = as.matrix(mvrnorm(n, mu = rep(0, p), Sigma = V))
+true_b = c(runif(10, -1, 1), rep(0, p-10))
+y_org = X_org %*% true_b + rnorm(n)
+
+X = scale(X_org)*sqrt(n/(n-1))
+y = scale(y_org)*sqrt(n/(n-1))
+lambda = 0.3
+
+
+soft_th <- function(b, lambda){
+  if(b>lambda){
+    b_ridge = b-lambda
+  }
+  else if(b < -lambda){
+    b_ridge = b+lambda
+  }
+  else{
+    b_ridge=0
+  }
+  return(b_ridge)
+}
+
+
+tol = 1e-7
+lambda = 0.3
+beta = rep(0,200)
+maxitr=100
+
+myLasson = function(X, y, lambda, tol, maxitr){
+  r = y - X[,-1]%*%beta[-1]  # initiate r
+  beta_ols = vector() # initiate beta_ols
+  beta = rep(0,200) # initiate beta
+  iter = 0
+  error=100
+  while((error >= tol) & (iter<=maxitr)) {
+    beta_old = beta
+    for (j in 1:199) {
+      #r = y-X[,-j]%*%beta[-j]
+      beta_ols[j] = (t(X[, j]) %*% r) / (t(X[, j]) %*% X[, j])
+      beta[j] = soft_th(b = beta_ols[j], lambda = lambda)
+      r = r - X[,j]*beta[j] + X[, j+1]*beta[j + 1]
+    }
+    # fill up beta 200
+    r = y-X[,-200]%*%beta[-200]
+    beta_ols[200] = (t(X[, 200]) %*% r) / (t(X[, 200]) %*% X[, 200])
+    beta[200] = soft_th(b = beta_ols[200], lambda = lambda)
+    error = sqrt(sum((beta-beta_old)^2))
+    iter = iter+1
+  }
+  return(beta)
+}
+
+myLasson(X=X, y=y, lambda=lambda, tol=tol, maxitr = maxitr)[1:10]
+
+
+```
+
+Compared to `glmnet` function, I obtained the same result. 
+
+
+
+# Question 2
+```{r}
+library(glmnet)
+
+myLasson = function(X, y, lambda,beta_warm, tol, maxitr){
+  
+  r = y - X[,-1]%*%beta[-1]  # initiate r
+  beta_ols = vector() # initiate beta_ols
+  beta = beta_warm # initiate beta
+  iter = 0
+  error=100
+  while((error >= tol) & (iter<=maxitr)) {
+    beta_old = beta
+    for (j in 1:199) {
+      #r = y-X[,-j]%*%beta[-j]
+      beta_ols[j] = (t(X[, j]) %*% r) / (t(X[, j]) %*% X[, j])
+      beta[j] = soft_th(b = beta_ols[j], lambda = lambda)
+      r = r - X[,j]*beta[j] + X[, j+1]*beta[j + 1]
+    }
+    r = y-X[,-200]%*%beta[-200]
+    beta_ols[200] = (t(X[, 200]) %*% r) / (t(X[, 200]) %*% X[, 200])
+    beta[200] = soft_th(b = beta_ols[200], lambda = lambda)
+    error = sqrt(sum((beta-beta_old)^2))
+    iter = iter+1
+  }
+  return(beta)
+}
+
+
+Path_wise = function(X, y, lambda_all, tol, maxitr) {
+  beta = rep(0, 200)
+  output = matrix(nrow=200, ncol=100)
+  i = 0
+  for (l in lambda_all) {
+    i=i+1
+    beta = myLasson(
+      X = X,
+      y = y,
+      tol = tol,
+      maxitr = maxitr,
+      beta_warm = beta, # just for trial,
+      lambda = l
+    )
+    output[,i] = beta
+  }
+  return(output)
+}
+
+glmnetfit = glmnet(X, y, intercept = FALSE)
+lambda_all = glmnetfit$lambda
+matplot(t(glmnetfit$beta[1:10, ]), type = "l", xlab = "Lambda Index", ylab = "Estimated Beta")
+
+output = Path_wise(X=X, y=y, lambda_all=lambda_all, tol=tol, maxitr=maxitr)
+matplot(t(output[1:10,]),
+        type = "l",
+        xlab = "Lambda Index",
+        ylab = "Estimated Beta")
+
+#matplot(t(glmnetfit$beta[1:10, ]), type = "l", xlab = "Lambda Index", ylab = "Estimated Beta")
+
+```
+variable5 and variable9 start to enter the model first. 
+the maximum discrepancy is that the betas tend to be a bit 'smaller' than the glmnet result. 
+
+# Question3 
+```{r}
+glmnetfit2 = glmnet(X_org, y_org, lambda = lambda_all*sd(y_org)*sqrt(n/(n-1)))
+lassobeta2 = coef(glmnetfit2)[2:11, ]
+matplot(t(as.matrix(coef(glmnetfit2)[2:11, ])), type = "l", xlab = "Lambda Index", ylab = "Estimated Beta")
+
+SDy = sd(y)
+stdj = apply(X, MARGIN = 2,sd)
+
+recover = function(beta_scaled){
+  beta = SDy*beta_scaled/stdj
+}
+
+beta_recoverd = apply(output, MARGIN=2, recover)
+matplot(t(beta_recoverd[1:10, ]), type = "l", xlab = "Lambda Index", ylab = "Estimated Beta")
+
+
+  
+```
+
+The the maximum discrepancy is that the recoverd beta of my own solution tend to be "larger" than the glmnet solution. 

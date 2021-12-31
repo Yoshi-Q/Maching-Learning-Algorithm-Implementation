@@ -1,0 +1,279 @@
+---
+title: "HW2_Xiuqiqi2"
+output: pdf_document
+author: Xiuqi Qi
+---
+## 1. 
+```{r}
+
+
+library(mlbench)
+data(PimaIndiansDiabetes)
+  
+set.seed(42)
+trainid = sample(1:nrow(PimaIndiansDiabetes), nrow(PimaIndiansDiabetes)/2)
+Diab.train = PimaIndiansDiabetes[trainid, ]
+Diab.test = PimaIndiansDiabetes[-trainid, ]
+
+```
+
+```{r}
+library(class)
+library(dplyr)
+
+
+k=1
+
+Diab.train.input = select(Diab.train, -diabetes)
+Diab.test.input = select(Diab.test,-diabetes)
+
+
+calc_train_error = function(k) {
+  #returns a list of two elements, the first element is the training error, the second is the testing error
+  fitted.train = knn(
+    train = Diab.train.input,
+    test = Diab.train.input ,
+    cl = Diab.train$diabetes,
+    k = k
+  )
+  
+  train_error = mean(fitted.train != Diab.train$diabetes)
+  return(train_error)
+}
+
+
+calc_test_error = function(k) {
+  fitted.test = knn(
+    train = Diab.train.input,
+    test = Diab.test.input ,
+    cl = Diab.train$diabetes,
+    k = k
+  )
+  test_error = mean(fitted.test != Diab.test$diabetes)
+  return(test_error)
+}
+
+trainerror = sapply(X=1:20, calc_train_error)
+testerror = sapply(1:20, calc_test_error)
+
+k = 1:20
+plot(x=k, y=trainerror, type = 'l',col='blue',ylim=range( c(trainerror, testerror)),ylab='error')
+lines(x=k, y=testerror ,type='l', col='red')
+legend("bottomright", pch ='l' ,col = c("blue", "red"),legend=c("train error","test error"))
+
+which(testerror==min(testerror))
+```
+
+1. The plot does match of an U-shaped error
+2. the optimal k value based on this result is 10 and 11
+
+## 2.
+```{r}
+library(caret)
+library(ElemStatLearn)
+
+data("zip.train")
+data("zip.test")
+ctrl2 <- trainControl(method = "cv",
+               number = 3,
+               )
+
+set.seed(542)
+model <- train( x=as.data.frame(zip.train[,-1]), y=as.factor(zip.train[,1]),
+              method = "knn",
+              #tuneLength = 12,
+              trControl = ctrl2,
+              tuneGrid = expand.grid(k = 1:20)
+              )
+
+
+y_hat_train = predict(model, newdata = as.data.frame(zip.train[,-1]))
+
+trainerror = 1-mean(as.factor(zip.train[,1])==as.factor(y_hat_train))
+
+model$finalModel
+head(y_hat_train)
+```
+
+In a manual way 
+
+```{r}
+set.seed(2)
+cv_index = sample(1:nrow(zip.train),size = 500)
+traindata = zip.train[cv_index, -1]
+testdata = zip.train[-cv_index, -1]
+traindata_y = zip.train[cv_index, 1]
+testdata_y = zip.train[-cv_index, 1]
+
+calc_train_error = function(k) {
+  fitted.train = knn(
+    train = traindata,
+    test = traindata,
+    cl = traindata_y,
+    k = k
+  )
+  train_error = mean(fitted.train != traindata_y)
+  return(train_error)
+}
+
+
+calc_test_error = function(k) {
+  
+  fitted.test = knn(
+    train = traindata,
+    test = testdata,
+    cl = traindata_y,
+    k = k
+  )
+  
+  test_error = mean(fitted.test != testdata_y)
+  return(test_error)
+}
+
+
+trainerror = sapply(X=1:20, calc_train_error)
+testerror = sapply(X=1:20, calc_test_error)
+print(which(testerror==min(testerror)))
+
+k = 1:20
+
+plot(x=k, y=trainerror, type = 'l',col='blue',ylim=range( c(trainerror, testerror)),ylab='error')
+lines(x=k, y=testerror ,type='l', col='red')
+legend("bottomright", pch ='l' ,col = c("blue", "red"),legend=c("train error","test error"))
+
+
+```
+the optimal k value is 1  
+
+the plot does not match our intuition of the bias-variance trade-off in terms of having an U-shaped error. which could be possibly explained by that there is potential lower dimensional subspace, the manifold. 
+
+## 3. 
+
+### a.
+```{r}
+
+set.seed(1)
+epsilon = rnorm(1000)
+data = as.data.frame(matrix(rnorm(5 * 1000), nrow = 1000, ncol = 5))
+
+y = data$V1 + 0.5*data$V2 - data$V3 + epsilon
+
+data$y = y
+
+traindata = data[1:500,]
+testdata = data[-seq(1,500),]
+
+myknn = function(xtest, xtrain, ytrain, k){
+  predict_single_yhat <- function(xnew) {
+    calc_dist = function(row, x0){
+      dist_r = sum((row-x0)^2)
+      return(dist_r)
+    }
+    dist_for_eachrow = apply(xtrain,
+                             MARGIN = 1,
+                             FUN = calc_dist,
+                             x0 = xnew)
+    sorted_dist = sort(dist_for_eachrow)
+    index = as.numeric(names(sorted_dist[1:k]))
+    
+    y_hat = mean(ytrain[index])
+    return(y_hat)
+  }
+  yhat = apply(xtest, MARGIN = 1, predict_single_yhat)
+  return(yhat)
+}
+
+ytest_hat = myknn(xtest = testdata[, -4],
+      xtrain = traindata[, -4],
+      ytrain = traindata$y, k=5)
+
+error = mean((ytest_hat-testdata$y)^2)
+cat('test error is', error)
+```
+
+### b.
+```{r}
+k = 1:15
+yhat_foreach_k = sapply(X=k, FUN=myknn, xtest = testdata[, -4],
+      xtrain = traindata[, -4],
+      ytrain = traindata$y)
+
+calc_error = function(yhat,y){
+  error = mean((yhat-y)^2)
+  return(error)
+}
+
+error = apply(yhat_foreach_k, MARGIN = 2, calc_error, y=testdata$y)
+
+plot(
+  x = 1000/k,
+  y = error,
+  type = 'l',
+  col = 'blue',
+  ylim = range(error),
+  ylab = 'error',
+  xlab = 'degree of freedom'
+)
+legend(
+  "bottomright",
+  pch = 'l' ,
+  col = "blue",
+  legend = 'testerror'
+)
+
+bestk = k[which(error==min(error))]
+df = 500/bestk
+cat(bestk,df)
+```
+
+optimal tuning parameter is k=4, and the according degree of freedom is 125
+
+
+### 4. 
+
+```{r}
+set.seed(1)
+library(dplyr)
+
+data = select(data, -y)
+data = as.matrix(data)
+X = matrix(rnorm(95*1000),nrow=1000, ncol=95)
+X = cbind(data, X)
+
+ctrl2 <- trainControl(method = "cv",
+                      number = 3,
+                      )
+
+model1 <- train( x=X, y=y,
+                method = "knn",
+                #tuneLength = 12,
+                trControl = ctrl2,
+                tuneGrid = expand.grid(k = 1:20)
+)
+
+set.seed(1)
+A = matrix(runif(95*5),nrow=5, ncol=95)
+X = data %*% A
+X = cbind(data, X)
+
+ctrl2 <- trainControl(method = "cv",
+                      number = 3,
+                      )
+model2 <- train( x=X, y=y,
+                method = "knn",
+                #tuneLength = 12,
+                trControl = ctrl2,
+                tuneGrid = expand.grid(k = 1:20)
+)
+
+model1$finalModel
+model2$finalModel
+cat('first case', model1$results$RMSE[11])
+cat('second case',model2$results$RMSE[8])
+
+
+
+```
+
+In the second case knn performs better. That's probably because there is a manifold inside the vector space. 
+

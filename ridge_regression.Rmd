@@ -1,0 +1,285 @@
+---
+title: "HW4_xiuqiqi2"
+author: "Xiuqi Qi"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# 1
+
+## A Simulation Study
+
+The problem of linear regression is $X^TX$ would be not invertable. 
+Ridge can address this problem by adding the penalty term. And the parameters would be exactly the same. This is because V is defined as The eigen vectors of $X^TX$, and since $X^TX$ has exactly same elements for every entry, hence it has only one none-zero eigenvalue. 
+
+
+
+```{r}
+set.seed(6)
+
+x1 = rnorm(100)
+x2 = x1
+x3 = x1
+
+e = rnorm(100)
+y = x1 * 0.7 + x2 * 0.8 + x3 * 0.9 + e
+df = data.frame(x1 = x1, x2 = x2, x3 = x3)
+X = as.matrix(df)
+
+decomp = svd(X)
+D = decomp$d
+U = decomp$u
+V = decomp$v
+
+
+theta = 100
+
+beta_ridge = V %*% solve(diag(D) %*% diag(D) + theta * diag(1, nrow = 3)) %*%
+  t(diag(D)) %*% t(U) %*% y
+
+y_hat = X%*%V %*% solve(diag(D) %*% diag(D) + theta * diag(1, nrow = 3)) %*%
+  t(diag(D)) %*% t(U) %*% y
+
+beta_ridge
+cat('eigen values are')
+D
+cat('rotaion matrix is ')
+print(V)
+
+
+
+```
+
+
+After preforming the above, modify your data by multiplying your X1 by 2
+```{r}
+set.seed(6)
+
+x1 = rnorm(100)
+x2 = x1
+x3 = x1
+
+
+e = rnorm(100)
+y = x1 * 0.7 + x2 * 0.8 + x3 * 0.9 + e
+df = data.frame(x1 = 2*x1, x2 = x2, x3 = x3)
+X = as.matrix(df)
+
+
+decomp = svd(X)
+D = decomp$d
+U = decomp$u
+V = decomp$v
+
+
+theta = 100
+
+beta_ridge = V %*% solve(diag(D) %*% diag(D) + theta * diag(1, nrow = 3)) %*%
+  t(diag(D)) %*% t(U) %*% y
+
+y_hat_modified = X%*%V %*% solve(diag(D) %*% diag(D) + theta * diag(1, nrow = 3)) %*%
+  t(diag(D)) %*% t(U) %*% y
+
+
+beta_ridge
+cat('eigen values are')
+D
+cat('rotaion matrix is ')
+print(V)
+
+sum(y_hat != y_hat_modified)
+```
+
+The outcome shows that the parameter for x1 is different, the parameters of x2 and x3 remains the same. Fitted values also remains the same. 
+
+## Bitcoin Price Prediction Revisited
+
+```{r}
+library(dplyr)
+library(glmnet)
+setwd('/Users/yoshi/Desktop/stat542/HW3')
+coin = read.csv('bitcoin.csv')
+
+coin$Date = as.Date(coin$Date)
+coin$daycount = unclass(coin$Date)
+
+a = as.data.frame(matrix(rep(NA, ncol(coin)), nrow = 1))
+names(a) <- names(coin)
+coin_day2 = rbind(coin[2:nrow(coin), ], a)
+
+a = as.data.frame(matrix(rep(NA, ncol(coin) * 2), ncol = ncol(coin)))
+names(a) <- names(coin)
+coin_day3 = rbind(coin[3:nrow(coin), ], a)
+
+a = as.data.frame(matrix(rep(NA, ncol(coin) * 6), ncol = ncol(coin)))
+names(a) <- names(coin)
+coin_day7 = rbind(coin[7:nrow(coin), ], a)
+
+names(coin_day2) = sapply(names(coin), paste, ... = 'day2', sep = '_')
+names(coin_day3) = sapply(names(coin), paste, ... = 'day3', sep = '_')
+names(coin_day7) = sapply(names(coin), paste, ... = 'day7', sep = '_')
+
+y = coin_day7$btc_market_price_day7
+
+newcoin = cbind(coin, coin_day2, coin_day3, y)
+
+newcoin <- na.omit(newcoin)
+
+split = unclass(as.Date('2016-12-31'))
+train = filter(newcoin, daycount <= split)
+test = filter(newcoin, daycount >= split)
+
+train = select(train,-c(
+  Date,
+  Date_day2,
+  Date_day3,
+  daycount,
+  daycount_day2,
+  daycount_day3,
+  
+))
+
+test = select(test,-c(
+  Date,
+  Date_day2,
+  Date_day3,
+  daycount,
+  daycount_day2,
+  daycount_day3,
+  
+))
+rm(coin)
+rm(newcoin)
+test_x = select(test,-y)
+test_y = select(test, y)
+train_x = select(train,-y)
+train_y = select(train, y)
+```
+start training
+```{r}
+
+ridgefit = cv.glmnet(
+  x = as.matrix(train_x),
+  y = as.matrix(train_y),
+  family = 'gaussian',
+  alpha = 0,
+  type.meaure='mse',
+  lambda = seq(100,0,-0.1)
+)
+
+y_hat = predict(ridgefit,
+                s = ridgefit$lambda.1se,
+                newx = as.matrix(test_x))
+
+mse_ridge = sum((y_hat-test_y)^2)
+
+# compare with OLS
+
+olsfit = lm(y~. ,data=train)
+y_hat_ols = predict(olsfit, newdata=test_x)
+mse_ols = sum((test_y-y_hat_ols)^2)
+
+
+cat('prediction error for ridge is',mse_ridge)
+cat('prediction error for OLS is', mse_ols)
+
+
+```
+
+1. We used MSE as a criteria for selecting lambda. 
+2. we consider lambda from 0 to 100 with step of 0.1
+3. the ridge regression performs better in terms of MSE on test data. 
+
+# 2. 
+## a.
+
+
+$$
+argmin\frac{1}{2n}||X\hat{\beta^{ols}}-X\beta||_2+\lambda||\beta||\\
+= argmin\frac{1}{2n}(\hat{\beta^{ols}}-X\beta)^TX^TX(\hat{\beta^{ols}}-X\beta) +\lambda||\beta||\\
+= argmin\frac{1}{2}(\hat{\beta^{ols}}-X\beta)(\hat{\beta^{ols}}-X\beta)+\lambda||\beta||\\
+$$
+This is the same as solve for each i
+
+
+
+$argmin\sum{\frac{1}{2}(\beta_i-\hat{\beta^{ols}})^2+\lambda|\beta_i|}$
+
+
+
+by solving diffrentiation equals to 0
+
+$$
+\hat{\beta^{ridge}}_i = \hat{\beta^{ols}}_i-\lambda \text{, if} \text{ }\hat{\beta^{ols}}_i>\lambda \\
+\hat{\beta^{ridge}}_i = \hat{\beta^{ols}}_i+\lambda \text{, if} \text{ }\hat{\beta^{ols}}_i<-\lambda \\
+\hat{\beta^{ridge}}_i=0\text{, if otherwise} 
+$$
+
+
+
+```{r}
+set.seed(1)
+n = 100
+X = rnorm(n)
+X = X / sqrt(sum(X*X))
+Y = X + rnorm(n)
+
+df = data.frame('x'=X, 'y'=Y)
+
+soft_th <- function(b, lambda){
+  if(b>lambda){
+    b_ridge = b-lambda
+  }
+  else if(b < -lambda){
+    b_ridge = b+lambda
+  }
+  else{
+    b_ridge=0
+  }
+  return(b_ridge)
+}
+
+
+beta_ols = solve(t(X)%*%X)%*%t(X)%*%Y
+
+beta_ridge = soft_th(b=beta_ols, lambda=0.5)
+beta_ridge
+```
+Set lambda=0.5, we have beta_ridge=0.444866
+
+## b.
+```{r}
+set.seed(1)
+n = 100
+X = rnorm(n, mean = 1, sd = 2)
+Y = 1 + X + rnorm(n)
+
+Xbar = mean(X)
+Ybar = mean(Y)
+SDy = sd(Y)
+SDx = sd(X)
+
+Y = (Y-mean(Y))/sd(Y)
+X = (X-mean(X))/sd(X)
+
+beta_ols = solve(t(X)%*%X)%*%t(X)%*%Y
+
+beta_l = soft_th(beta_ols, lambda=0.5)
+
+
+beta_0 = Ybar - Xbar*SDy*beta_l/SDx
+beta_1 = SDy*beta_ols/SDx
+beta_0
+beta_1
+
+```
+
+By implementing the procedure and set lambda =0.5 as before, we got beta_0 = 1.652593, beta_1=0.9994698. 
+
