@@ -1,0 +1,359 @@
+---
+title: "HW10"
+output: pdf_document
+author: "Xiuqi Qi(xiuqiqi2)"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question1
+
+## a
+```{r}
+library(ElemStatLearn)
+
+
+set.seed(2)
+data1 = zip.train
+data2 = zip.test
+
+data = rbind(data1,data2)
+rm(data1, data2)
+index = sample(1:nrow(data), 1000, replace = F)
+train = data[index, ]
+test = data[-index, ]
+
+class = levels(as.factor(train[,1]))
+class = as.numeric(class)
+y = train[,1]
+X = train[,-1]
+iter = 0
+pi_k = c()
+mu_k = list()
+
+for (k in class){
+  index = y==k
+  iter = iter +1
+  pi[iter] = mean(y==k)
+  mu_k[[iter]] = apply(X[index,], MARGIN = 2, FUN=mean)
+}
+
+
+sigma_tool = function(xi, mu_k, k){
+  muk = mu_k[[k+1]]
+  sigma_part = (xi-muk)%*%t(xi-muk)
+  return(sigma_part)
+}
+
+
+big_sigma = matrix(data=0, nrow = 256, ncol=256)
+
+for (k in class){
+  index = y==k
+  sigma = matrix(data=0, nrow=256, ncol=256)
+  muk = mu_k[[k+1]]
+  for(i in 1:sum(index)){
+    part = (X[index,][i,]-muk)%*%t(X[index,][i,]-muk)
+    sigma = sigma + part
+  }
+  big_sigma = big_sigma + sigma
+}
+big_sigma = big_sigma/(nrow(X)-length(class))
+
+big_sigma_inv = solve(big_sigma)
+
+calc_object = function(xi, mu_k, pi, k){
+  # fix k, calculate the object function of a certain row
+  func = -1/2 * t((xi-mu_k[[k+1]])) %*% 
+    big_sigma_inv %*% (xi-mu_k[[k+1]])+
+    t(xi) %*% big_sigma_inv %*% mu_k[[k+1]] + log(pi[k+1])
+  return(func)
+}
+
+return_class = function(xi, mu_k, pi){
+  # still fix xi, but calc value from all k
+  values = sapply(class, FUN = calc_object, xi=xi, mu_k = mu_k, pi=pi)
+  k_value = class[which(values==max(values))]
+  return(k_value)
+}
+
+y_hat = apply(test[,-1],  MARGIN = 1,  FUN=return_class, mu_k = mu_k, pi=pi)
+
+hit_rate =mean(y_hat == test[,1])
+hit_rate
+```
+the overall detection rate is about 0.692697
+
+### print the confusion table
+```{r}
+library(cvms)
+library(ggplot2)
+library(ggimage)
+library(rsvg)
+cof_mat = confusion_matrix(targets = test[,1], predictions = y_hat )
+
+cof_mat$Table
+plot_confusion_matrix(cof_mat$`Confusion Matrix`[[1]])
+cof_mat$`Class Level Results`
+```
+digit "2" seems to be misclassified the most. 
+
+
+
+## b
+```{r}
+
+sigma_k = list()
+iter = 0
+r = 0.5
+for (k in class){
+  iter = iter+1
+  index = y==k
+  sigma = matrix(data=0, nrow=256, ncol=256)
+  muk = mu_k[[k+1]]
+  for(i in 1:sum(index)){
+    part = (X[index,][i,]-muk)%*%t(X[index,][i,]-muk)
+    sigma = sigma + part
+  }
+  sigma = sigma / (sum(index)-1)
+  sigma_k[[iter]] = sigma 
+}
+
+
+calc_object = function(xi, mu_k, pi, k, inv_sigmaka, det_sigmaka){
+  # fix k, calculate the object function of a certain row
+  func = -1/2 * log(det_sigmaka[k+1]) -
+    (1/2 * t((xi-mu_k[[k+1]])) %*% 
+    inv_sigmaka[[k+1]] %*% (xi-mu_k[[k+1]])) + log(pi[k+1])
+  return(func)
+}
+
+
+return_class = function(xi, mu_k, pi, alpha, r, inv_sigmaka, det_sigmaka){
+  # still fix xi, but calc value from all k
+  values = sapply(
+    class,
+    FUN = calc_object,
+    xi = xi,
+    mu_k = mu_k,
+    pi = pi,
+    inv_sigmaka = inv_sigmaka,
+    det_sigmaka = det_sigmaka
+  )
+  k_value = class[which(values==max(values))]
+  
+  return(k_value)
+}
+
+
+
+
+myqda = function(test_x,alpha,mu_k,pi,r){
+  sigma_k_a = list()
+  for (i in 1:length(class)){
+    sigma_k_a[[i]]=alpha*
+      sigma_k[[i]]+(1-alpha)*r*big_sigma+
+      (1-alpha)*(1-r)*(diag(big_sigma))^2*diag(nrow(big_sigma))
+  }
+  
+  det_sigmaka=sapply(sigma_k_a,det)
+  inv_sigmaka=lapply(sigma_k_a,solve)
+  
+ y_hat = apply(test_x, MARGIN = 1, FUN=return_class,  mu_k, pi, alpha, r, inv_sigmaka, det_sigmaka)
+  return(y_hat)
+}
+
+#myqda(test[,-1],alpha=alpha,mu_k=mu_k,pi=pi,r=)
+
+rate = c()
+iter = 0
+r = 0.9
+for (alpha in seq(0.1,0.9,0.1)){
+  iter = iter+1
+  sigma_k_a = list()
+  for (i in 1:length(class)){
+  sigma_k_a[[i]]=alpha*
+    sigma_k[[i]]+(1-alpha)*r*big_sigma +
+    (1-alpha)*(1-r)*(diag(big_sigma))^2*diag(nrow(big_sigma))
+}
+
+det_sigmaka=sapply(sigma_k_a,det)
+inv_sigmaka=lapply(sigma_k_a,solve)
+
+y_hat = apply(test[,-1], MARGIN = 1, FUN=return_class,  mu_k, pi, alpha, r, inv_sigmaka, det_sigmaka)
+
+
+  rate[iter] = mean(y_hat==test[,1])
+}
+
+alpha_final = seq(0.1,0.9,0.1)[which(rate==max(rate))]
+
+
+```
+
+report the tuned result 
+```{r}
+alpha = alpha_final
+for (i in 1:length(class)){
+  sigma_k_a[[i]]=alpha*
+    sigma_k[[i]]+(1-alpha)*r*big_sigma +
+    (1-alpha)*(1-r)*(diag(big_sigma))^2*diag(nrow(big_sigma))
+}
+
+det_sigmaka=sapply(sigma_k_a,det)
+inv_sigmaka=lapply(sigma_k_a,solve)
+
+y_hat = apply(test[,-1], MARGIN = 1, FUN=return_class,  mu_k, pi, alpha, r=0.9, inv_sigmaka, det_sigmaka)
+```
+
+
+```{r}
+cof_mat = confusion_matrix(targets = test[,1], predictions = y_hat )
+
+cof_mat$Table
+plot_confusion_matrix(cof_mat$`Confusion Matrix`[[1]])
+cof_mat$`Class Level Results`
+```
+
+digit "5" seems to be misclassified the most. 
+
+
+
+# Question2 
+
+```{r}
+library(ElemStatLearn)
+data(SAheart)
+
+heart = SAheart
+heart$famhist = as.numeric(heart$famhist)-1
+n = nrow(heart)
+p = ncol(heart)
+
+heart.full = glm(chd~., data=heart, family=binomial)
+
+# fitted value 
+yhat = (heart.full$fitted.values>0.5)
+table(yhat, SAheart$chd)
+
+X <- as.matrix(cbind("intercept" = 1, heart[,-10]))
+Y <- as.matrix(heart$chd)
+colnames(X) = NULL
+
+logisticLL_tool = function(b, X, Y, i){
+  part = Y[i]%*%t(X[i,])%*%b - log(1+exp(t(X[i,])%*%b))
+  return(part)
+}
+
+
+#logisticLL = function(b, X, Y) {
+#  index = 1:nrow(X)
+#  parts = sapply(
+#    index,
+#    FUN = logisticLL_tool,
+#    b = b,
+#   X = X,
+#    Y = Y
+#  )
+#  log_like  =  Reduce(`+`, parts)
+# return(log_like)
+#}
+
+logisticLL = function(b, X, Y) {
+  LL = 0
+  for (i in 1:nrow(X)) {
+    part =  Y[i]%*%t(X[i,])%*%b - log(1+exp(t(X[i,])%*%b))
+    LL = LL + part
+  }
+  return(-LL)
+}
+
+
+gradient_tool= function(b,X,Y,i){
+  part = Y[i] * t(X[i, ]) - as.vector((exp(t(X[i, ]) %*% b) %*%
+               t(X[i, ]))) / as.numeric(1 + exp(t(X[i, ]) %*% b))
+  return(part)
+}
+
+
+#gradient = function(b, X, Y){
+#  index = 1:nrow(X)
+#  list_of_vector = lapply(index, 
+#                         FUN = gradient_tool,
+#                          b=b, X=X, Y=Y)
+# gradient = Reduce(`+`, list_of_vector)
+# return(gradient)
+#}
+  
+
+gradient = function(b, X, Y){
+  grad = rep(0,10)
+  for (i in 1:nrow(X)) {
+    part = gradient_tool(b, X, Y, i)
+    grad = grad + part
+  }
+  return(-grad)
+}
+
+result1 = optim(
+  par = rep(0.99, 10) ,
+  method = "BFGS",
+  fn = logisticLL ,
+  X = X,
+  Y = Y
+)
+
+result2 = optim(
+  par = rep(0.99, 10),
+  method = "BFGS",
+  fn = logisticLL,
+  gr = gradient,
+  X = X,
+  Y = Y
+)
+
+
+
+print('result without gradient function is')
+print(result1$par)
+print('result with gradient function is')
+print(result2$par)
+print('result from glm package is') 
+print(heart.full$coefficients)
+
+
+# training data accuracy
+
+predict_logit = function(xi, b){
+  p = exp(t(xi)%*%b)/(exp(t(xi)%*%b)+1)
+  class = (sign(p-1/2)+1)/2   
+  return(class)
+}
+## for result1
+
+
+y_hat_result1 = apply(X, MARGIN = 1, FUN = predict_logit, b=result1$par)
+result1_rate = mean(y_hat_result1==Y)
+
+## for result2
+y_hat_result2 = apply(X, MARGIN = 1, FUN = predict_logit, b=result2$par)
+result2_rate = mean(y_hat_result2==Y)
+
+## for glm
+
+y_hat_glm = (sign(heart.full$fitted.values-1/2)+1)/2
+result_glm_rate = mean(y_hat_glm==Y)
+
+result1_rate
+result2_rate
+result_glm_rate 
+
+```
+
+Both results' coefficient  stay close to the `glm()` output. 
+And in terms of training data accuracy, they seems to be exactly the same. 
+
+
+

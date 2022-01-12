@@ -1,0 +1,186 @@
+---
+title: "HW7"
+author: "Xiuqi Qi"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question1
+
+## a.
+
+Using the Silverman’s rule-of-thumb, fit and plot the regression line with both kernel functions, and plot them together in a single figure. Report the testing MSE of both methods.
+```{r}
+library(mlbench)
+data(Ozone)
+  
+set.seed(1)
+mydata = data.frame("time" = seq(1:nrow(Ozone))/nrow(Ozone), "ozone" = Ozone$V4, "wind" = Ozone$V6)
+  
+mydata = data.frame("time" = seq(1:nrow(Ozone))/nrow(Ozone), "ozone" = Ozone$V4, "wind" = Ozone$V6)
+
+
+trainid = sample(1:nrow(Ozone), 250)
+train = mydata[trainid, ]
+test = mydata[-trainid, ]
+par(mfrow=c(1,2))
+
+plot(train$time, train$ozone, pch = 19, cex = 0.5)
+plot(train$wind, train$ozone, pch = 19, cex = 0.5)
+
+train = train[order(train$time),]
+test = test[order(test$time),]
+train = na.omit(train)
+test = na.omit(test)
+
+k_gauss = function(lambda, xi, x) {
+  u = abs(x - xi) / lambda
+  k = (1 / sqrt(2)) * exp(-u^2 / 2) / lambda
+  return(k)
+}
+
+k_epchkov = function(lambda, xi, x) {
+  u = abs(x - xi) / lambda
+  k = (3 / 4) * (1 - u ^ 2) * min(sign(u-1), 0) / lambda
+  return(k)
+}
+
+nw = function(kernal, x, xi, yi, lambda) {
+  if (kernal == "Gauss") {
+    k = k_gauss
+  }
+  else if (kernal == 'Epanechnikov') {
+    k = k_epchkov
+  }
+  
+  y_hat = sum(sapply(X = xi, FUN=k, lambda = lambda, x = x ) * yi)/sum(sapply(X = xi, FUN=k, lambda = lambda, x = x))
+  return(y_hat)
+}
+
+silver = (length(train$time))^(-1/5)*sd(train$time)*1.06
+
+gauss_result = sapply(seq(0,1,0.01), FUN = nw, kernal="Gauss",xi=train$time,yi=train$ozone,lambda=silver)
+
+epchkov_result = sapply(seq(0,1,0.01), FUN = nw, kernal="Epanechnikov",xi=train$time,
+      yi=train$ozone,lambda=silver)
+
+
+plot(x=seq(0,1,0.01), y=gauss_result, type='l', col='red')
+points(x=seq(0,1,0.01), y=epchkov_result, type='l', col='blue')
+
+
+calc_gauss_mse = function(lambda){
+  y_gauss = sapply(test$time, FUN=nw, kernal="Gauss",xi=train$time,
+                           yi=train$ozone,lambda=lambda)
+  return(mean((y_gauss-test$ozone)^2))
+}
+
+calc_epchkov_mse = function(lambda){
+  y_hat = sapply(test$time, FUN=nw, kernal="Epanechnikov",xi=train$time,
+                yi=train$ozone,lambda=lambda )
+  return(mean((y_hat-test$ozone)^2))
+}
+
+print(calc_gauss_mse(silver))
+print(calc_epchkov_mse(silver))
+
+```
+MSE with Gaussian kernal is 30.07, with Epanechnikov kernal is 29.87.
+
+
+
+## b.
+
+Base on our theoretical understanding of the bias-variance trade-off, select two h
+ values for the Gaussian kernel: a value with over-smoothing (small variance and large bias); a value with under-smoothing (large variance and small bias), and plot the two curves, along with the Gaussian rule-of-thumb curve, in a single figure. Clearly indicate which curve is over/under-smoothing.
+```{r}
+gauss_result_smooth = sapply(seq(0,1,0.01), FUN=nw, kernal="Gauss",xi=train$time,
+      yi=train$ozone,lambda=0.2 )
+
+gauss_result_rough = sapply(seq(0,1,0.01), FUN=nw, kernal="Gauss",xi=train$time,
+      yi=train$ozone,lambda=0.02 )
+
+plot(x=seq(0,1,0.01), y=gauss_result_smooth, type='l', col='red', ylim = range(0:20))
+points(x=seq(0,1,0.01), y=gauss_result_rough, type='l', col='blue')
+points(x=seq(0,1,0.01), y=gauss_result, type='l', col='green')
+legend("bottomright", pch ='l' ,col = c("red","blue",'green'),legend=c("over smooth", "under smooth",'rule of thumb'))
+```
+
+# c.
+For the Epanechnikov kernel, tune the h
+value (on a grid of 10 different h
+values) by minimizing the testing data. Plot your optimal regression line.
+
+```{r}
+h = seq(0.01, 0.3, length.out=10)
+
+error = vector()
+for (i in h){
+  mse = calc_epchkov_mse(lambda=i)
+  error = append(error, mse)
+}
+
+lambda_op = h[which(error==min(error))]
+
+epchkov_result = sapply(seq(0,1,0.01), FUN = nw, kernal="Epanechnikov",xi=train$time,
+ yi=train$ozone,lambda=lambda_op)
+
+#epchkov_result = sapply(seq(0,1,0.1), FUN=nw, kernal="Epanechnikov",xi=train$time, yi=train$ozone, lambda= lambda)
+
+
+plot(x=seq(0,1,0.01), y=epchkov_result, type='l', col='blue')
+
+```
+
+according to the tuning, my optimal lambda is 0.01
+
+# Question 2
+
+Calculate the prediction error and compare this to the univariate model in Question 1, in terms of prediction accuracy
+```{r}
+
+k_multi_gauss = function( x1,x2,x_1,x_2) {
+  #x1 , x2 are the train data, x_1, x_2 are the test data
+  lambda1=length(x1)^(-(1/(2+4))) * sd(x1)
+  lambda2=length(x2)^(-(1/(2+4))) * sd(x2)
+  k = exp((-1/2)*((x1-x_1)/lambda1)^2 + (-1/2)*((x2-x_2)/lambda2)^2)
+  return(k)
+}
+
+multi_nw = function(x_1,x_2,x1,x2,y){
+  #x1 , x2 are the train data, x_1, x_2 are the test data
+  #x_1 x_2 are single values
+  k = k_multi_gauss
+  nw = sum(k_multi_gauss(x1=x1,x2=x2,x_1=x_1,x_2=x_2)*y)/
+    sum(k_multi_gauss(x1=x1,x2=x2,x_1=x_1,x_2=x_2))
+  
+  return(nw)
+}
+
+y_hat = mapply(FUN=multi_nw, test$time, test$wind, 
+               MoreArgs = list(x1=train$time, x2=train$wind, y=train$ozone))
+
+mse_multi = mean((y_hat-test$ozone)^2)
+mse_multi
+
+
+```
+
+the MSE for multivariate Gaussion kernal model is  40.67705, which is better than univaiate Gaussian kernal model. 
+
+
+#### Can you think of ways to improve two-dimensional kernel regression by using better bandwidth selection? Can the bandwidth further incorporate the covariance structure among variables? Provide some discussion on this topic, but you do not need to implement them.
+
+One way I can think of is to select bandwidth of these two variables seperately. Given that the correlation between the two covariates and the predicted variable may differ a lot, the selection may incorporate the information from the covariance matrix; Or we can also simply tune the bandwidth numerically. 
+
+#### In the case of the two-dimensional kernel estimator with bandwidth for both variables, if we want to extend our bias and variance derivation in the kernel lecture note, would you expect changes of rate of them? Please provide a discussion. However, you do not need to provide the proof.
+
+From the derivation of the lecture, I would expect a change of rate. The convergence rate depend on the dimension and sample size of the data, and hence I would expect the convergence rate to change in the two dimensional case. 
+
+

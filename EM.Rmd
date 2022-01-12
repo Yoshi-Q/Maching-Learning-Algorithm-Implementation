@@ -1,0 +1,260 @@
+---
+title: "HW9_xiuqiqi2"
+author: "Xiuqi Qi"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+plot(faithful, pch = 19)
+```
+
+
+
+# Part (a)
+
+\begin{align*}
+
+Q(\boldsymbol \theta | \boldsymbol \theta^{k}) & = 
+E_{\mathbf{Z} | \mathbf{x}, \boldsymbol \theta^{(k)}}[L(\mathbf{x}, \mathbf{z} | \boldsymbol \theta)]\\
+
+& = E_{\mathbf{Z} | \mathbf{x}, \boldsymbol \theta^{(k)}}[\sum_{i=1}^n \mathbf{log} L(\boldsymbol \theta;\mathbf{x_i}, \mathbf{z})]\\
+
+& = \sum_{i=1}^n \sum_{j=1}^2 \mathbf{P}(Z_i =j | \mathbf{x_i} = x_i,\boldsymbol \theta^{(k)}) \log L(\boldsymbol \theta_j,x_i) \\
+
+
+& = \sum_{i=1}^n \sum_{j=1}^2 \mathbf{P}(Z_i =j | \mathbf{x_i} = x_i,\boldsymbol \theta^{(k)}) \Big[(1-Z_i)\log\phi_{\boldsymbol \mu_1, \boldsymbol \Sigma_1}(x_i) + Z_i \phi_{\boldsymbol \mu_2, \boldsymbol \Sigma_2}(x_i) + (1-Z_i)\log(1-\tau) + Z_i \log \tau \Big]
+\end{align*}
+
+
+
+
+
+\begin{align*}
+
+\mathbf{P}(Z_i = 1 | \mathbf{x_i} = x_i,\boldsymbol \theta^{(k)})
+
+&= \frac{\mathbf{P}(Z_i =1 , \mathbf{x_i} = x_i |\boldsymbol \theta^{(k)})}{\mathbf{P}( \mathbf{x_i} = x_i | \boldsymbol \theta^{(k)})} \\
+
+& = \frac{\mathbf{P}(Z_i =1 , \mathbf{x_i} = x_i |\boldsymbol \theta^{(k)})}{\mathbf{P}(Z_i =1 , \mathbf{x_i} = x_i |\boldsymbol \theta^{(k)}) + \mathbf{P}(Z_i =2 , \mathbf{x_i} = x_i |\boldsymbol \theta^{(k)})} \\
+
+& = \frac{\tau \phi_{\boldsymbol \mu_1^{(k)}, \boldsymbol \Sigma_1^{(k)}}(x_i)}{(1-\tau)\phi_{\boldsymbol \mu_1^{(k)}, \boldsymbol \Sigma_1^{(k)}}(x_i) + \tau \phi_{\boldsymbol \mu_2^{(k)}, \boldsymbol \Sigma_2^{(k)}}(x_i)} \equiv \mathbf{P_i^{(k)}} \\
+
+\mathbf{P}(Z_i = 2 | \mathbf{x_i} = x_i,\boldsymbol \theta^{(k)}) 
+&= 1- \mathbf{P}(Z_i = 1 | \mathbf{x_i} = x_i,\boldsymbol \theta^{(k)}) 
+ = 1 - \mathbf{P_i^{(k)}}   
+ 
+\\
+\log\phi_{\boldsymbol \mu_j, \boldsymbol \Sigma_j}(x_i) &= -\frac{d}{2} log(2\tau) -\frac{1}{2}log|\boldsymbol \Sigma_j| -\frac{1}{2}(\mathbf{x_i} - \boldsymbol \mu_j)^T \boldsymbol \Sigma_j^{-1} (\mathbf{x_i} - \boldsymbol \mu_j)  \quad j=1,2
+
+\end{align*}
+
+# Part (b)
+
+\begin{align*}
+& solve \frac{\partial g(\boldsymbol \theta | \boldsymbol \theta^{(k)})}{\partial \tau}  = 0 \\
+
+\Rightarrow \quad  &\sum_{i=1}^n \sum_{j=1}^2 \mathbf{P}( Z_i =j | \mathbf{x_i} = x_i,\boldsymbol \theta^{(k)}) \Big( \frac{1-Z_i}{1- \tau} + \frac{Z_i}{\tau} \Big) = 0 \\
+
+\Rightarrow \quad &\sum_{i=1}^n \Big( \frac{ \mathbf{p_i^{(k)}} }{\tau} + \frac{1-\mathbf{p_i^{(k)}} }{1 - \tau} \Big) = 0 \\
+
+\Rightarrow \quad &\tau^{(k)} = \frac{\sum_{i=1}^n \mathbf{p_i^{(k)}}}{n} \\
+
+ &\\
+&\frac{\partial g(\boldsymbol \theta | \boldsymbol \theta^{(k)})}{\partial \boldsymbol \mu_1}  = 0 \\
+\Rightarrow \quad &\sum_{i=1}^n \mathbf{p_i^{(k)}} \boldsymbol \Sigma_1^{-1} (\mathbf{x_i} - \boldsymbol \mu_1) =0 \\
+\Rightarrow \quad &\boldsymbol \mu_1^{(k)} =\frac{\sum_{i=1}^n \mathbf{p_i^{(k)}} \mathbf{x_i}}{\sum_{i=1}^n \mathbf{p_i^{(k)}}}\\
+\quad
+\end{align*}
+
+
+\begin{align*}
+& \frac{\partial g(\boldsymbol \theta | \boldsymbol \theta^{(k)})}{\partial \boldsymbol \Sigma_1^{-1}} = 0 \\
+
+\Rightarrow &\sum_{i=1}^n  \mathbf{p_i^{(k)}} [-\frac{1}{2} \frac{\partial \log|\boldsymbol \Sigma_1|}{\partial \boldsymbol \Sigma_1^{-1}} - \frac{1}{2}\frac{\partial \text{Trace}((\mathbf{x_i} - \boldsymbol \mu_1)^T \boldsymbol \Sigma_1^{-1} (\mathbf{x_i} - \boldsymbol \mu_1))}{ \partial \boldsymbol \Sigma_1^{-1}} ]  =0\\
+
+\Rightarrow  & \sum_{i=1}^n \mathbf{p_i^{(k)}}[\frac{1}{2}\frac{\partial \log|\boldsymbol \Sigma_1^{-1}|}{\partial \boldsymbol \Sigma_1^{-1}}-\frac{1}{2} \frac{\partial \text{Trace}((\mathbf{x_i} - \boldsymbol \mu_1) (\mathbf{x_i} - \boldsymbol \mu_1)^T \boldsymbol \Sigma_1^{-1} )}{ \partial \boldsymbol \Sigma_1^{-1}}] =0 \\
+
+\Rightarrow & \frac{1}{2}\sum_{i=1}^n \mathbf{p_i^{(k)}}[\boldsymbol \Sigma_1 - (\mathbf{x_i} - \boldsymbol \mu_1)^T  (\mathbf{x_i} - \boldsymbol \mu_1)] = 0 \\
+
+\Rightarrow & \boldsymbol \Sigma_1^{(k)} = \frac{\sum_{i=1}^n \mathbf{p_i^{(k)}} (\mathbf{x_i} - \boldsymbol \mu_1^{(k)})  (\mathbf{x_i} - \boldsymbol \mu_1^{(k)})^T}{\sum_{i=1}^n \mathbf{p_i^{(k)}}}
+\end{align*}
+
+
+
+
+
+
+# Part (c)
+## store the final result
+```{r}
+#detach("package:mixtools", unload=TRUE)
+library(mvtnorm)
+
+# this function helps with updating of sigma
+sigma_tool = function(index, Ti, x, mu) {
+  Ti[index] * (x[index,] - mu) %*% t((x[index,] - mu))
+}
+
+
+# part(c): implementing the algorithm
+x = faithful
+
+#initialize everthing
+Pi = 0.5
+mu1 = c(2, 60)
+mu2 = c(4.5, 80)
+sigma1 = matrix(c(1, 1, 1 , 160), nrow = 2)
+sigma2 = matrix(c(1.5, 15, 15, 180), nrow = 2)
+T1 = rep(0.5, nrow(x))
+x = as.matrix(x)
+colnames(x) = NULL
+
+for (k in 1:10000) {
+  # E step
+  
+  density1 = apply(
+    x,
+    MARGIN = 1,
+    FUN = dmvnorm,
+    mean = mu1,
+    sigma = sigma1
+  )
+  density2 = apply(
+    x,
+    MARGIN = 1,
+    FUN = dmvnorm,
+    mean = mu2,
+    sigma = sigma2
+  )
+  
+  T1_new = Pi * density1 / (Pi * density1 + (1 - Pi) * density2) # T1
+  T2_new = 1 - T1_new
+  
+  # M step
+  Pi_new = mean(T1_new)
+  
+  # update mu1 and mu2
+  mu1 = apply(T1_new * x, FUN = sum, MARGIN = 2) / sum(T1_new)
+  mu2 = apply(T2_new * x, FUN = sum, MARGIN = 2) / sum(T2_new)
+  
+  # update sigma1 and sigma2
+  sigma_tool = function(index, Ti, x, mu){
+    Ti[index] * (x[index,] - mu) %*% t((x[index,] - mu))
+  }
+  
+  sigma1 = lapply(
+    1:nrow(x),
+    FUN = sigma_tool,
+    Ti = T1_new,
+    x = x,
+    mu = mu1
+  )
+  sigma1 = Reduce(`+`, sigma1) / sum(T1_new)
+  
+  sigma2 = lapply(
+    1:nrow(x),
+    FUN = sigma_tool,
+    Ti = T2_new,
+    x = x,
+    mu = mu2
+  )
+  sigma2 = Reduce(`+`, sigma2) / sum(T2_new)
+  
+  if (mean(abs(T1-T1_new)) < 1e-12) {
+    print(k)
+    print(c(mu1, mu2, Pi_new) )
+    break
+  }
+  else{
+    T1 = T1_new
+    Pi = Pi_new
+    print(c(mu1, mu2, Pi_new) )
+  }
+  }
+
+
+T1 = T1_new
+
+result = list(
+  "mu1" = mu1,
+  "mu2" = mu2,
+  "sigma1" = sigma1,
+  "sigma2" = sigma2,
+  "Pi" = T1
+)
+
+
+```
+Algorithm stops at 19th iteration, and gives the result
+
+
+## store the result of first iteration
+```{r}
+Pi = 0.5
+mu1 = c(2, 60)
+mu2 = c(4.5, 80)
+sigma1 = matrix(c(1, 1, 1 , 160), nrow = 2)
+sigma2 = matrix(c(1.5, 15, 15,180), nrow=2)
+T1 = rep(0,nrow(x))
+x = as.matrix(x)
+colnames(x) = NULL
+density1 = apply(x, MARGIN=1, FUN=dmvnorm, mean = mu1, sigma = sigma1)
+density2 = apply(x, MARGIN=1, FUN=dmvnorm,mean = mu2, sigma = sigma2)
+T1_new = Pi*density1/(Pi*density1+(1-Pi)*density2)
+T2_new = 1 - T1_new
+Pi_new = mean(T1_new) 
+mu1 = apply(T1_new*x, FUN=sum, MARGIN = 2)/sum(T1_new)
+mu2 = apply(T2_new*x, FUN=sum, MARGIN = 2)/sum(T2_new)
+sigma1 = lapply(1:nrow(x), FUN=sigma_tool, Ti=T1_new, x=x,mu=mu1)
+sigma1 = Reduce(`+`, sigma1)/sum(T1_new)
+sigma2 = lapply(1:nrow(x), FUN=sigma_tool, Ti=T2_new, x=x,mu=mu2)
+sigma2 = Reduce(`+`, sigma2)/sum(T2_new)
+result_1st = list("mu1" = mu1,
+              "mu2" = mu2,
+              "sigma1" = sigma1, 
+              "sigma2" = sigma2, 
+              "Pi" = T1_new)
+```
+
+
+
+## plot the result
+```{r}
+library(mixtools)
+
+mu1 = c(2, 60)
+mu2 = c(4.5, 80)
+sigma1 = matrix(c(1, 1, 1 , 160), nrow = 2)
+sigma2 = matrix(c(1.5, 15, 15, 180), nrow = 2)
+
+addellipse <- function(mu, Sigma, ...)
+  {
+    ellipse(mu, Sigma, alpha = .05, lwd = 1, ...)
+    ellipse(mu, Sigma, alpha = .25, lwd = 2, ...)
+  }
+  
+# plot of initial values
+plot(faithful)
+addellipse(mu=mu1, Sigma=sigma1, col = "darkorange")
+addellipse(mu=mu2, Sigma=sigma2, col = "deepskyblue")
+
+# plot of first iteration
+plot(faithful)
+addellipse(result_1st$mu1, result_1st$sigma1, col = "darkorange")
+addellipse(result_1st$mu2, result_1st$sigma2, col = "deepskyblue")
+  
+# plot of the final result
+plot(faithful)
+addellipse(result$mu1, result$sigma1, col = "darkorange")
+addellipse(result$mu2, result$sigma2, col = "deepskyblue")
+  
+  
+detach("package:mixtools", unload=TRUE)
+```
+The above are the plot of initial values, plot of first iteration and the plot of the final result. 

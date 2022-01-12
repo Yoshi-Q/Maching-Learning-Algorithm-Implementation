@@ -1,0 +1,324 @@
+---
+title: "HW11_xiuqiqi2"
+output: pdf_document
+author: "Xiuqi Qi"
+---
+
+# 1.
+
+## a.
+```{r}
+library(quadprog)
+
+set.seed(4); n <-30; p <- 2
+xpos <- matrix(rnorm(n*p, mean=0, sd=1), n, p)
+xneg <- matrix(rnorm(n*p, mean=3, sd=1), n, p)
+
+x <- rbind(xpos, xneg)
+y <- matrix(c(rep(1, n), rep(-1, n)))
+
+plot(x,col=ifelse(y>0,"darkorange", "deepskyblue"), pch = 19, xlab = "x1",
+     ylab = "x2")
+legend("topleft", c("Positive","Negative"), 
+       col=c("darkorange", "deepskyblue"), pch=c(19, 19), 
+       text.col=c("darkorange", "deepskyblue"))
+
+
+
+A1 = diag(as.vector(y))
+A2 = cbind(rep(1,60), x)
+
+A = t(A1%*%A2)
+
+b0 = rep(1,60)
+d = rep(0,3)
+
+D = diag(c(0,1,1))
+D[1,1] = 10^(-5)
+
+result = solve.QP(Dmat=D, dvec = d, Amat = A, bvec = b0)
+par = result$solution
+
+hyperplane = function(b0,b1,b2,x1){
+  x2 = (-b0 - x1*b1)/b2
+  return(x2)
+}
+
+
+
+
+
+plot(x,col=ifelse(y>0,"darkorange", "deepskyblue"), pch = 19, xlab = "x1",
+     ylab = "x2")
+
+
+abline(coef=c(-par[1]/par[3], -par[2]/par[3]))
+
+legend("topleft", c("Positive","Negative"), 
+       col=c("darkorange", "deepskyblue"), pch=c(19, 19), 
+       text.col=c("darkorange", "deepskyblue"))
+
+
+
+distance = function(beta, xi){
+  
+  return((xi[1]*beta[2]+xi[2]*beta[3]+beta[1])/mean(beta^2))
+}
+
+dis_above = apply(x[y==1, ], MARGIN = 1, FUN=distance, beta=par)
+dis_below = apply(x[y==-1, ], MARGIN = 1, FUN=distance, beta=par)
+
+margin1 = x[y==1, ][which(abs(dis_above)==min(abs(dis_above))),]
+margin2 = x[y==-1, ][which(abs(dis_below)==min(abs(dis_below))),]
+
+points(margin1[,1], margin1[,2], col="black", cex=3)
+points(margin2[1], margin2[2], col='black', cex=3)
+
+b0_above = - margin2[1]*par[2] - margin2[2]*par[3]
+abline(coef = c(-b0_above/par[3], -par[2]/par[3]) )
+b0_below = -margin1[1,][1]*par[2] - margin1[1,][2]*par[3]
+abline(coef = c(-b0_below/par[3], -par[2]/par[3]) )
+
+```
+## b.
+
+```{r}
+
+
+D = x %*% t(x) %*% y %*% t(y)
+D = diag(diag(D))
+
+
+
+d = rep(1,60)
+A = diag(1,nrow=nrow(x))
+b0= rep(0,nrow(A))
+
+
+D = matrix(0, nrow=60, ncol=60)
+for(i in 1:60){
+  for (j in 1:60){
+    D[i,j] = y[i]*y[j]*t(x[i,])%*%x[j,]
+  }
+}
+diag(D) = diag(D)+10^(-6)
+result = solve.QP(Dmat=D, dvec = d, Amat = A, bvec = b0, meq = 1)
+alpha = result$solution
+
+
+
+
+D2 = (x%*%t(x)) * y%*%t(y)
+D3 = y%*%t(y) * (x %*% t(x))
+diag(D2) = diag(D2)+10^(-6)
+result2 = solve.QP(Dmat=D2, dvec = d, Amat = A, bvec = b0, meq = 1)
+alpha2 = result2$solution
+
+
+beta_tool = function(index, x,y,alpha){
+  return(alpha[index]*y[index]*x[index,])
+}
+
+myListOfVector = lapply(1:60, FUN=beta_tool, x=x,y=y,alpha=alpha)
+beta = Reduce(`+`, myListOfVector)
+
+```
+
+
+## b(2)
+```{r}
+linear.kernel <- function(x1, x2) {
+return(x1%*%x2)
+}
+
+eps = 5e-4
+n = length(y)
+Q = sapply(1:n, function(i) y[i]*t(x)[,i])
+D = t(Q)%*%Q
+d = matrix(1, nrow=n)
+A = rbind(t(y),diag(n),-diag(n))
+C = .5
+b = c(0,rep(0,n),rep(-C,n))
+sol = solve.QP(D+eps*diag(n), d, t(A), b, meq=1, factorized=FALSE)
+alpha = sol$solution
+```
+
+```{r}
+beta_tool = function(index, x,y,alpha){
+return(alpha[index]*y[index]*x[index,])
+}
+
+myListOfVector = lapply(1:60, FUN=beta_tool, x=x,y=y,alpha=alpha)
+beta = Reduce(`+`, myListOfVector)
+
+
+beta0_tool = function(xi, beta){
+  return(t(xi)%*%beta)
+}
+
+beta0 = -(max(apply(x[y==-1,], MARGIN = 1, FUN=beta0_tool, beta=beta))+min(apply(x[y==1,], MARGIN = 1, FUN=beta0_tool, beta=beta)))/2
+
+par = c(beta0, beta)
+
+```
+
+```{r}
+plot(x,col=ifelse(y>0,"darkorange", "deepskyblue"), pch = 19, xlab = "x1",
+     ylab = "x2")
+
+abline(coef=c(-par[1]/par[3], -par[2]/par[3]))
+legend("topleft", c("Positive","Negative"), 
+       col=c("darkorange", "deepskyblue"), pch=c(19, 19), 
+       text.col=c("darkorange", "deepskyblue"))
+dis_above = apply(x[y==1, ], MARGIN = 1, FUN=distance, beta=par)
+dis_below = apply(x[y==-1, ], MARGIN = 1, FUN=distance, beta=par)
+
+margin1 = x[y==1, ][which(abs(dis_above)==min(abs(dis_above))),]
+margin2 = x[y==-1, ][which(abs(dis_below)==min(abs(dis_below))),]
+
+points(margin1[1], margin1[2], col="black", cex=3)
+points(margin2[1], margin2[2], col='black', cex=3)
+
+b0_above = - margin2[1]*par[2] - margin2[2]*par[3]
+abline(coef = c(-b0_above/par[3], -par[2]/par[3]) )
+b0_below = -margin1[1]*par[2] - margin1[2]*par[3]
+abline(coef = c(-b0_below/par[3], -par[2]/par[3]) )
+
+```
+
+# 2
+## a.
+```{r}
+lambda=0.13
+
+exp_func =function(par,x,y){
+  
+  x_expand =cbind(rep(1,nrow(x)),x)
+  
+  fx = x_expand %*% par
+  return(exp(-y*fx))
+}
+
+
+
+
+pen_loss = function(par, x, y) {
+  
+  exp_part = exp_func(par, x, y)
+  loss = sum(log(exp_part+1)) + lambda * (sum(par ^ 2))
+  return(loss)
+}
+
+grad_tool = function(h){
+  return(-(1 - 1 / (h + 1)))
+}
+
+grad=function(par,x,y){
+  exp_parts=exp_func(par,x,y)
+  grad = c()
+  x_expand = cbind(rep(1,nrow(x)), x)
+                   
+  for (i in 1:length(par)){
+    grad[i] = sum(sapply(
+      exp_parts,
+      FUN = grad_tool
+    ) * y * x_expand[,i])
+  }
+  return(grad)
+}
+
+
+solution=optim(par = c(0.1,0.1,0.1),fn=pen_loss,gr=grad,x=x,y=y,method="BFGS")
+par = solution$par
+
+plot(x,col=ifelse(y>0,"darkorange", "deepskyblue"), pch = 19, xlab = "x1",
+     ylab = "x2")
+#lines(seq(-1.5,5,0.01),x2)
+abline(coef=c(-par[1]/par[3], -par[2]/par[3]))
+legend("topleft", c("Positive","Negative"), 
+       col=c("darkorange", "deepskyblue"), pch=c(19, 19), 
+       text.col=c("darkorange", "deepskyblue"))
+
+
+#Report training error
+fx = cbind(rep(1, nrow(x)), x) %*% par
+y_hat = sign(fx)
+error = mean(y != y_hat)
+error
+
+```
+
+training error rate is 0.2333
+
+
+```{r}
+set.seed(2)
+  n = 300
+  p = 2 
+
+  
+  x <- matrix(runif(n*p), n, p)
+  side <- (x[, 2] > 0.5 + 0.3*sin(3*pi*x[, 1]))
+  y <- sample(c(1, -1), n, TRUE, c(0.9, 0.1))*(side == 1) + sample(c(1, -1), n, TRUE, c(0.1, 0.9))*(side == 0)
+  
+```
+
+
+
+```{r}
+lambda=0.03
+
+
+pen_loss = function(w, K, y) {
+  loss = sum(log(1 + exp(-y * t(w) %*%K))) +
+    lambda * t(w) %*% 
+    K %*% w
+  return(loss)
+}
+
+grad=function(w,K,y){
+  grad=c()
+  M=t(w) %*% (K+t(K))
+  for (i in 1:nrow(K)){
+    grad[i] = sum(-y*K[,i]*exp(-y*t(w)%*%K)/(1+exp(-y*t(w)%*%K)))+M[i]
+  }
+  return(grad)
+}
+
+
+K = matrix(0,nrow=300, ncol=300)
+for(i in 1:300){
+  for(j in 1:300){
+    K[i,j]=(1 + t(x[i,])%*%x[j,])^2
+  }
+}
+
+
+
+
+
+solution=optim(par = rep(0,300),fn = pen_loss, gr=grad, K, y, method="BFGS")
+y_hat = sign(t(solution$par) %*% K)
+error=mean(y_hat!=y)
+error
+
+
+lab1 = seq(0,1,0.01)
+lab2=0.5+0.3*sin(3*pi*lab1)
+points = cbind(lab1,lab2)
+
+
+
+
+plot(x,col=ifelse(y>0,"darkorange", "deepskyblue"), pch = 19, xlab = "x1", ylab = "x2")
+lines(points,pch=20)
+legend("topleft", c("Positive","Negative"), 
+       col=c("darkorange", "deepskyblue"), pch=c(19, 19), text.col=c("darkorange", "deepskyblue"))
+legend("topleft", c("Positive","Negative"), 
+       col=c("darkorange", "deepskyblue"), pch=c(19, 19), text.col=c("darkorange", "deepskyblue"))
+
+
+
+```
+
+The error rate is 0.23. 
