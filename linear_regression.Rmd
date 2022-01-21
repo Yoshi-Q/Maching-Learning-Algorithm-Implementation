@@ -1,0 +1,331 @@
+---
+title: "HW3_xiuqiqi2"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##  1.
+
+```{r}
+set.seed(542)
+
+simulate_on_p=function(p){
+  X = matrix(rnorm(300 * 100), nrow = 300, ncol = 100)
+  e = rnorm(300)
+  e_new = rnorm(300)
+  
+  each_term = function(i) {
+    X[, i] * 0.9 ^ i
+  }
+  
+  Xbeta = apply(sapply(1:100, each_term), MARGIN = 1, sum)
+  X_y = Xbeta + e
+  
+  Y_y = Xbeta + e_new
+  
+  
+  S = X[, 1:p]
+  H = S %*% solve((t(S) %*% S)) %*% t(S)
+  
+  y_hat = H %*% X_y
+  
+  prediction_error = sum((Y_y - y_hat) ^ 2)
+  bias = sum((Xbeta - H %*% Xbeta) ^ 2)
+  variance = 1 * p
+  summ = bias + variance + sum(e_new^2)
+  
+  return (c(prediction_error,bias, variance, summ))
+}
+
+spit = function(p){
+  a = sapply(seq(p,p, length.out = 200), simulate_on_p)
+  indicators = apply(a, MARGIN=1, FUN=mean)
+  indicators = as.vector(indicators)
+  return(indicators)
+}
+
+result = sapply(1:100, spit)
+
+plot(x=1:100, y=result[1,], type = 'l',col='red',ylim = range(1:800)) 
+lines(x=1:100, y=result[2,],col='blue')
+lines(x=1:100, y=result[3,],col='yellow')
+lines(x=1:100, y=result[4,],col='green')
+legend("topright", pch ='l' ,col = c("red", "blue",'yellow', 'green'),legend=c('prediction error','bias', 'variance','sum'))
+```
+
+The result fits our theretical analysis perfectly, because the sum of variacne, bias and irreducable error line almost converge with test error line. 
+
+
+## 2. 
+
+### a.
+```{r}
+
+library(dplyr)
+setwd('/Users/yoshi/Desktop/stat542/HW3')
+coin = read.csv('bitcoin.csv')
+
+# your training data is constructed using only information up to 12/31/2016
+# your testing data is constructed using only information starting from 01/01/2017
+# The goal of our analysis is to predict the   **btc_market_price**
+
+# generate y 
+# each row contains the outcome on the seventh day and the 
+#covariates of the first three days
+
+coin$Date = as.Date(coin$Date)
+coin$daycount = unclass(coin$Date)
+
+a = as.data.frame(matrix(rep(NA,ncol(coin)), nrow=1))
+names(a) <- names(coin) 
+coin_day2 = rbind(coin[2:nrow(coin),], a)
+
+a = as.data.frame(matrix(rep(NA,ncol(coin)*2), ncol=ncol(coin)))
+names(a) <- names(coin) 
+coin_day3 = rbind(coin[3:nrow(coin),], a)
+
+a = as.data.frame(matrix(rep(NA,ncol(coin)*6), ncol=ncol(coin)))
+names(a) <- names(coin) 
+coin_day7 = rbind(coin[7:nrow(coin),], a)
+
+names(coin_day2) = sapply(names(coin), paste, ...='day2', sep = '_')
+names(coin_day3) = sapply(names(coin), paste, ...='day3', sep = '_')
+names(coin_day7) = sapply(names(coin), paste, ...='day7', sep = '_')
+
+y = coin_day7$btc_market_price_day7
+
+newcoin = cbind(coin, coin_day2,coin_day3,y)
+
+newcoin <- na.omit(newcoin)
+ #since number of observation containing na is not too many, I simply omit them. 
+
+
+#Process each single covariate/outcome by considering 
+#centering/scaling/transformation and/or removing outliers
+
+
+# split the data  by 12/31/2016
+split = unclass(as.Date('2016-12-31'))
+train = filter(newcoin, daycount<=split)
+test = filter(newcoin, daycount >= split)
+
+
+train = select(
+  train,
+  -c(
+    Date,
+    Date_day2,
+    Date_day3,
+    daycount,
+    daycount_day2,
+    daycount_day3,
+    
+  )
+)
+
+test = select(
+  test,
+  -c(
+    Date,
+    Date_day2,
+    Date_day3,
+    daycount,
+    daycount_day2,
+    daycount_day3,
+    
+  )
+)
+
+summary(train)
+```
+
+### b.
+```{r}
+lm.null = lm(y~1, data=train)
+lm.full = lm(y~., data=train)
+
+aicmodel = step(lm.null, direction="forward", trace=0 , scope=list(upper=lm.full, lower=lm.null))
+bicmodel = step(lm.full, direction="backward", trace=0 , k=log(nrow(newcoin)), scope=list(upper=lm.full, lower=lm.null))
+
+
+```
+summary of AIC model:
+```{r}
+mean(aicmodel$residuals^2)
+summary(aicmodel)$r.squared
+
+y_test = test$y
+test_x = select(test, -c(y))
+
+y_hat_aic = predict(aicmodel, newdata=test_x)
+mse_test_aic = mean((y_hat_aic - y_test) ^ 2)
+R_sq_aictest = 1 - (mean((y_hat_aic-y_test)^2))/mean((y_test-mean(y_test))^2)
+
+mse_test_aic
+R_sq_aictest
+
+```
+summary of BIC model
+```{r}
+
+mean(bicmodel$residuals^2)
+summary(bicmodel)$r.squared
+
+
+y_hat_bic = predict(bicmodel, newdata=test_x)
+mse_test_bic = mean((y_hat_bic - y_test) ^ 2)
+R_sq_bictest = 1 - (mean((y_hat_aic-y_test)^2))/mean((y_test-mean(y_test))^2)
+
+mse_test_bic
+R_sq_bictest
+```
+On training data they perform almost as well. But on testing data BIC  model performs a bit better. 
+
+### c. 
+```{r}
+
+library(dplyr)
+setwd('/Users/yoshi/Desktop/stat542/HW3')
+coin = read.csv('bitcoin.csv')
+
+# your training data is constructed using only information up to 12/31/2016
+# your testing data is constructed using only information starting from 01/01/2017
+# The goal of our analysis is to predict the   **btc_market_price**
+
+# generate y 
+# each row contains the outcome on the seventh day and the 
+#covariates of the first three days
+
+coin$Date = as.Date(coin$Date)
+coin$daycount = unclass(coin$Date)
+
+a = as.data.frame(matrix(rep(NA,ncol(coin)), nrow=1))
+names(a) <- names(coin) 
+coin_day2 = rbind(coin[2:nrow(coin),], a)
+
+a = as.data.frame(matrix(rep(NA,ncol(coin)*6), ncol=ncol(coin)))
+names(a) <- names(coin) 
+coin_day7 = rbind(coin[7:nrow(coin),], a)
+
+names(coin_day2) = sapply(names(coin), paste, ...='day2', sep = '_')
+names(coin_day7) = sapply(names(coin), paste, ...='day7', sep = '_')
+y = coin_day7$btc_market_price_day7
+
+newcoin = cbind(coin, coin_day2,y)
+
+newcoin <- na.omit(newcoin)
+
+
+# split the data  by 12/31/2016
+split = unclass(as.Date('2016-12-31'))
+train = filter(newcoin, daycount<=split)
+test = filter(newcoin, daycount >= split)
+
+train = select(
+  train,
+  -c(
+    Date,
+    Date_day2,
+    daycount,
+    daycount_day2,
+    
+    
+  )
+)
+
+test = select(
+  test,
+  -c(
+    Date,
+    Date_day2,
+    daycount,
+    daycount_day2,
+    
+    
+  )
+)
+
+
+train = select(train, -c(btc_market_cap,btc_market_cap_day2,,btc_estimated_transaction_volume_usd_day2,btc_estimated_transaction_volume_usd,btc_blocks_size,btc_avg_block_size,btc_blocks_size_day2,btc_avg_block_size_day2,btc_hash_rate,btc_difficulty,btc_hash_rate_day2,btc_difficulty_day2))
+train = select(train, -c( btc_median_confirmation_time, btc_median_confirmation_time_day2))
+train = select(train, -c(btc_miners_revenue_day2,btc_miners_revenue,btc_market_price_day2 ))
+train = select(train, -c(btc_n_unique_addresses_day2, btc_n_transactions,btc_n_transactions_day2))
+
+train = select(train, -c(btc_cost_per_transaction_day2, btc_trade_volume))
+
+test = select(test, -c(btc_market_cap,btc_market_cap_day2,,btc_estimated_transaction_volume_usd_day2,btc_estimated_transaction_volume_usd,btc_blocks_size,btc_avg_block_size,btc_blocks_size_day2,btc_avg_block_size_day2,btc_hash_rate,btc_difficulty,btc_hash_rate_day2,btc_difficulty_day2))
+
+test = select(test, -c( btc_median_confirmation_time, btc_median_confirmation_time_day2))
+
+test= select(test, -c(btc_miners_revenue_day2,btc_miners_revenue,btc_market_price_day2 ))
+test = select(test, -c(btc_n_unique_addresses_day2, btc_n_transactions,btc_n_transactions_day2))
+
+test = select(test, -c(btc_cost_per_transaction_day2, btc_trade_volume))
+
+test_x = select(test, -y)
+test_y = select(test, y)
+```
+run the best subset algorithm
+```{r}
+library(leaps)
+ex_lm = regsubsets(x = select(train, -y),
+                   y = train$y,
+                   nvmax=7, really.big = T)
+
+summary(ex_lm,matrix=T)
+
+predict.regsubsets <- function(object,newdata,id,...){
+form <- as.formula(object$call[[2]])
+mat <- model.matrix(form,newdata)
+coefi <- coef(object,id=id)
+xvars <- names(coefi)
+mat[,xvars]%*%coefi
+}
+
+
+```
+
+summarize the outcome
+```{r}
+summary(ex_lm,matrix=T)$rss[7]
+summary(ex_lm,matrix=T)$cp[7]
+summary(ex_lm,matrix=T)$rsq[7]
+summary(ex_lm,matrix=T)$adjr2[7]
+
+best_fit = lm(y~btc_market_price+btc_cost_per_transaction+btc_n_unique_addresses+btc_n_transactions_total+btc_n_transactions_excluding_chains_longer_than_100+btc_trade_volume_day2+btc_n_transactions_per_block_day2, data=train)
+
+y_hat = predict(best_fit, newdata=test_x)
+
+test_err = sum((y_hat - test_y)^2)
+
+cat('test error is ',test_err)
+
+```
+
+### d.
+```{r}
+library(caret)
+ctrl2 <- trainControl(method = "cv",
+                      number = 3,
+                      )
+
+knnfit = train(
+  x = select(train,-y),
+  y = train$y,
+  method = "knn", 
+  trControl = ctrl2,
+  tuneGrid = expand.grid(k = 1:20)
+)
+
+knnfit$finalModel
+y_hat = predict(knnfit, newdata=test_x)
+
+test_err = sum((y_hat - test_y)^2)
+
+test_err
+```
+
+at first I thought KNN would work better because the data looks very unlinear. However the result is that linear model has much less test error. 
